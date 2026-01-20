@@ -5,38 +5,35 @@ from datetime import datetime
 from dotenv import load_dotenv
 import subprocess
 
-print("Starting PayPal fetch script...")
+print("Starting PayPal ORDERS fetch...")
 
 load_dotenv()
 
-print("Fetching access token...")
+# Get access token
 access_token = subprocess.check_output(
     ["python3", "scripts/paypal_auth.py"]
 ).decode().strip()
-print("Access token received.")
-
-url = "https://api-m.sandbox.paypal.com/v1/payments/payment"
 
 headers = {
     "Authorization": f"Bearer {access_token}",
     "Content-Type": "application/json"
 }
 
-params = {
-    "count": 10
-}
+# Replace with your actual approved Order ID
+ORDER_ID = input("Enter approved Order ID: ").strip()
 
-response = requests.get(url, headers=headers, params=params)
-print("API response status:", response.status_code)
+url = f"https://api-m.sandbox.paypal.com/v2/checkout/orders/{ORDER_ID}"
 
+response = requests.get(url, headers=headers)
 response.raise_for_status()
-data = response.json()
+
+order = response.json()
 
 os.makedirs("data/raw", exist_ok=True)
 
-file_path = f"data/raw/paypal_payments_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+file_path = f"data/raw/paypal_order_{ORDER_ID}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
 
 with open(file_path, "w") as f:
-    json.dump(data, f, indent=2)
+    json.dump(order, f, indent=2)
 
-print(f"Saved raw payments data to {file_path}")
+print(f"Saved raw order data to {file_path}")

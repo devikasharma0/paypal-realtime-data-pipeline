@@ -1,33 +1,34 @@
 import json
 import csv
-import os
+from pathlib import Path
 from datetime import datetime
 
-RAW_DIR = "data/raw"
-OUTPUT_DIR = "data/processed"
+RAW_DIR = Path("data/raw")
+OUTPUT_DIR = Path("data/processed")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Get latest raw file
+# Get latest raw PayPal payments file
 raw_files = sorted(
-    [f for f in os.listdir(RAW_DIR) if f.startswith("paypal_payments")],
+    RAW_DIR.glob("paypal_payments_*.json"),
     reverse=True
 )
 
 if not raw_files:
-    raise Exception("No raw PayPal payment files found")
+    raise RuntimeError("No raw PayPal payment files found")
 
-latest_file = os.path.join(RAW_DIR, raw_files[0])
+latest_file = raw_files[0]
+print(f"Using raw file: {latest_file.name}")
 
-with open(latest_file, "r") as f:
+with open(latest_file) as f:
     data = json.load(f)
 
-payments = data.get("payments", [])
+# PayPal sandbox returns 'payments' array OR 'transactions'
+payments = data.get("payments") or data.get("transactions") or []
 
-output_file = os.path.join(
-    OUTPUT_DIR,
-    f"payments_fact_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
-)
+if not payments:
+    raise RuntimeError("No payment records found in raw data")
+
+output_file = OUTPUT_DIR / f"payments_fact_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
 
 with open(output_file, "w", newline="") as csvfile:
     writer = csv.writer(csvfile)
@@ -42,8 +43,10 @@ with open(output_file, "w", newline="") as csvfile:
         "ingestion_time"
     ])
 
+    rows_written = 0
+
     for p in payments:
-        txn = p.get("transactions", [{}])[0]
+        txn = (p.get("transactions") or [{}])[0]
         amount_info = txn.get("amount", {})
 
         writer.writerow([
@@ -57,4 +60,6 @@ with open(output_file, "w", newline="") as csvfile:
             datetime.utcnow().isoformat()
         ])
 
-print(f"Processed {len(payments)} payments → {output_file}")
+        rows_written += 1
+
+print(f"✅ Wrote {rows_written} payment rows → {output_file}")
